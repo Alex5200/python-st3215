@@ -1,0 +1,41 @@
+[project]
+name = "python-st3215"
+version = "0.0.1"
+authors = [
+  { name="Alessio D'Ambrosio", email="alessio@alessiodam.dev" },
+]
+description = "A Python library for interfacing with the ST3215 smart servo."
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "pyserial >= 3.4",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Manufacturing",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering",
+    "Topic :: System :: Hardware",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)"
+]
+license = "GPL-3.0"
+license-files = ["LICENSE"]
+
+[project.urls]
+Homepage = "https://github.com/alessiodam/python-st3215"
+Issues = "https://github.com/alessiodam/python-st3215/issues"
+
+[build-system]
+requires = ["hatchling >= 1.27"]
+build-backend = "hatchling.build"
