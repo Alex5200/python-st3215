@@ -216,3 +216,10 @@ class ST3215:
                 )
                 responses[servo_id] = None
         return responses
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+        return False
