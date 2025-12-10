@@ -17,7 +17,7 @@ try:
     try:
         old_id_input = input("\nEnter CURRENT Servo ID (default 1): ").strip()
         OLD_ID = int(old_id_input) if old_id_input else 1
-        
+
         new_id_input = input("Enter NEW Servo ID: ").strip()
         if not new_id_input:
             print("New ID is required. Exiting.")
@@ -41,10 +41,10 @@ try:
         # Unlock EEPROM to allow saving changes
         print("Unlocking EEPROM...")
         servo.sram.unlock()
-        
+
         print("Writing new ID...")
         servo.eeprom.write_id(NEW_ID)
-        
+
         # Lock EEPROM again (optional but recommended)
         print("Locking EEPROM...")
         servo.sram.lock()
