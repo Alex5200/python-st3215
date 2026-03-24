@@ -40,25 +40,31 @@ class ST3215:
 
     def __init__(
         self,
-        port: str,
+        port: Optional[str] = None,
         baudrate: int = 1000000,
         read_timeout: float = 0.002,
         retry_count: int = 3,
         retry_delay: float = 0.01,
+        ser: Optional[object] = None,
     ) -> None:
         """
         Initialize the ST3215 controller with the given serial port settings.
 
         Args:
-            port (str): Serial port to connect to (e.g., 'COM3' or '/dev/ttyUSB0').
+            port (Optional[str]): Serial port to connect to (e.g., 'COM3' or '/dev/ttyUSB0').
             baudrate (int): Baud rate for serial communication. Default is 1,000,000.
             read_timeout (float): Read timeout in seconds. Default is 0.002.
             retry_count (int): Number of retries for failed communication. Default is 3.
             retry_delay (float): Delay between retries in seconds. Default is 0.01.
+            ser (Optional[object]): Optional existing serial object to use instead of creating a new one.
 
         Raises:
+            ValueError: If neither port nor ser is provided.
             serial.SerialException: If the serial port cannot be opened.
         """
+        if port is None and ser is None:
+            raise ValueError("Either 'port' or 'ser' must be provided.")
+
         self.logger.debug(
             f"Initializing ST3215 on port {port} with baudrate {baudrate}"
         )
@@ -69,8 +75,14 @@ class ST3215:
         self.retry_delay = retry_delay
 
         try:
-            self.ser = serial.Serial(port, baudrate=baudrate, timeout=read_timeout)
-            self.logger.debug(f"Serial port opened at {baudrate} baud.")
+            if ser is not None:
+                self.ser = ser
+                if hasattr(self.ser, "timeout"):
+                    # type: ignore[assignment]
+                    self.ser.timeout = read_timeout
+            else:
+                self.ser = serial.Serial(port, baudrate=baudrate, timeout=read_timeout)
+                self.logger.debug(f"Serial port opened at {baudrate} baud.")
         except serial.SerialException as e:
             self.logger.error(f"Failed to open serial port {port}: {e}")
             raise
@@ -82,9 +94,11 @@ class ST3215:
 
         Safe to call multiple times.
         """
-        if hasattr(self, "ser") and self.ser.is_open:
-            self.ser.close()
-            self.logger.info("Serial port closed.")
+        if hasattr(self, "ser"):
+            is_open = getattr(self.ser, "is_open", True)
+            if is_open and hasattr(self.ser, "close"):
+                self.ser.close()
+                self.logger.info("Serial port closed.")
 
     def is_connected(self) -> bool:
         """
@@ -93,26 +107,11 @@ class ST3215:
         Returns:
             bool: True if connected, False otherwise.
         """
-        return hasattr(self, "ser") and self.ser.is_open
+        return hasattr(self, "ser") and getattr(self.ser, "is_open", True)
 
     def build_packet(
         self, servo_id: int, instruction: int, parameters: Sequence[int] | None = None
     ) -> bytes:
-        """
-        Build a command packet for the ST3215 protocol.
-
-        Args:
-            servo_id: Target servo ID (0-253) or 254 for broadcast.
-            instruction: Instruction code from Instruction enum.
-            parameters: Optional list of parameter bytes.
-
-        Returns:
-            bytes: Complete packet ready to send.
-
-        Raises:
-            InvalidInstructionError: If instruction code is invalid.
-            InvalidIDError: If servo_id is out of range.
-        """
         if not 0 <= servo_id <= 254:
             raise InvalidIDError(servo_id)
         if not Instruction.has_value(instruction):
@@ -159,7 +158,8 @@ class ST3215:
 
         try:
             self.ser.write(packet)
-            self.ser.flush()
+            if hasattr(self.ser, "flush"):
+                self.ser.flush()
             return packet
         except serial.SerialException as e:
             self.logger.error(f"Failed to send packet: {e}")
@@ -178,9 +178,11 @@ class ST3215:
         Returns:
             Optional[bytes]: Response data or None if no response.
         """
-        if timeout is not None:
+        if timeout is not None and hasattr(self.ser, "timeout"):
             old_timeout = self.ser.timeout
             self.ser.timeout = timeout
+        else:
+            old_timeout = None
 
         try:
             raw_data = self.ser.read(1024)
@@ -195,26 +197,12 @@ class ST3215:
                 return raw_data[len(sent_packet) :]
             return raw_data
         finally:
-            if timeout is not None:
+            if old_timeout is not None and hasattr(self.ser, "timeout"):
                 self.ser.timeout = old_timeout
 
     def parse_response(
         self, data: bytes, raise_on_error: bool = False
     ) -> Optional[dict[str, object]]:
-        """
-        Parse a response packet from a servo.
-
-        Args:
-            data: Raw response data.
-            raise_on_error: If True, raise exception on servo error status.
-
-        Returns:
-            Optional[dict]: Parsed response or None if invalid.
-
-        Raises:
-            ChecksumError: If checksum validation fails.
-            ServoStatusError: If servo reports error and raise_on_error is True.
-        """
         self.logger.debug(f"Parsing response data: {list(data)}")
         if len(data) < 6:
             self.logger.warning("Response too short to parse.")
