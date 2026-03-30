@@ -12,3 +12,10 @@ __all__ = [
     "Servo",
     "__version__",
 ]
+
+# ROS2 integration (optional, requires rclpy)
+try:
+    from .ros2_node import ServoDriverNode, main
+    __all__.extend(["ServoDriverNode", "main"])
+except ImportError:
+    pass

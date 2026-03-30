@@ -50,3 +50,21 @@ python_version = "3.13"
 packages = ["python_st3215"]
 exclude = ["examples"]
 strict = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[project.optional-dependencies]
+test = [
+    "pytest >= 8.0",
+    "pytest-cov >= 4.0",
+]
+ros2 = [
+    "rclpy >= 5.0",
+    "sensor_msgs >= 5.0",
+    "std_msgs >= 5.0",
+]
