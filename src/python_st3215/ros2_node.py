@@ -17,6 +17,29 @@ from sensor_msgs.msg import JointState
 from std_msgs.msg import Float32MultiArray, Bool
 
 from .st3215 import ST3215
+from dataclasses import dataclass, field
+from typing import Optional, Dict
+
+
+@dataclass
+class ServoLimits:
+    """Min/max position limits for a single servo."""
+    min_position: int = 0
+    max_position: int = 4095
+    enabled: bool = True
+
+
+@dataclass
+class ServoConfig:
+    """Configuration for a single servo axis."""
+    servo_id: int = 1
+    name: str = "Axis 1"
+    limits: ServoLimits = field(default_factory=ServoLimits)
+    current_position: int = 0
+    target_position: int = 0
+    speed: int = 100
+    acceleration: int = 50
+    enabled: bool = True
 
 
 class ServoDriverNode(Node):
@@ -40,7 +63,7 @@ class ServoDriverNode(Node):
     def __init__(
         self,
         port: str = 'COM3',
-        servo_ids: list[int] | None = None,
+        servo_ids: list[int] | int = None,
         update_rate_hz: float = 20.0,
         servo_bus: ST3215 | None = None,
     ) -> None:
@@ -102,6 +125,141 @@ class ServoDriverNode(Node):
         except Exception as e:
             self.get_logger().error(f"Failed to connect to {port}: {e}")
             raise
+
+    def move_servo_with_limits(
+        self,
+        servo_id: int,
+        position: int,
+        speed: int = 100,
+        acc: int = 50,
+        check_limits: bool = True
+    ) -> bool:
+        """
+        Move a servo with optional limits checking.
+
+        Args:
+            servo_id: Servo ID to move
+            position: Target position
+            speed: Movement speed
+            acc: Acceleration
+            check_limits: If True, validate position against limits
+
+        Returns:
+            True if movement succeeded, False if blocked by limits or error
+        """
+        # Find config for this servo
+        config = None
+        for c in self.servo_configs.values():
+            if c.servo_id == servo_id:
+                config = c
+                break
+
+        # Check limits if enabled
+        if check_limits and config and config.limits.enabled:
+            if position < config.limits.min_position:
+                self.get_logger().warning(
+                    f"Position {position} below minimum {config.limits.min_position} "
+                    f"for servo {servo_id}"
+                )
+                return False
+            if position > config.limits.max_position:
+                self.get_logger().warning(
+                    f"Position {position} above maximum {config.limits.max_position} "
+                    f"for servo {servo_id}"
+                )
+                return False
+
+        # Execute movement
+        try:
+            self.servo_bus.MoveTo(servo_id, position, speed=speed, acc=acc, wait=False)
+            return True
+        except Exception as e:
+            self.get_logger().error(f"Failed to move servo {servo_id}: {e}")
+            return False
+
+    def test_boundaries(
+        self,
+        servo_id: int,
+        min_pos: int,
+        max_pos: int,
+        speed: int = 50
+    ) -> bool:
+        """
+        Test min/max boundaries for a single servo.
+
+        Moves servo to minimum, then maximum, then back to center.
+
+        Args:
+            servo_id: Servo ID to test
+            min_pos: Minimum position to test
+            max_pos: Maximum position to test
+            speed: Movement speed
+
+        Returns:
+            True if test completed successfully
+        """
+        try:
+            import time
+
+            # Move to minimum position
+            self.servo_bus.MoveTo(servo_id, min_pos, speed=speed, acc=30, wait=True)
+            time.sleep(0.5)
+
+            # Move to maximum position
+            self.servo_bus.MoveTo(servo_id, max_pos, speed=speed, acc=30, wait=True)
+            time.sleep(0.5)
+
+            # Move back to center
+            center = (min_pos + max_pos) // 2
+            self.servo_bus.MoveTo(servo_id, center, speed=speed, acc=30, wait=False)
+
+            self.get_logger().info(
+                f"Boundary test completed for servo {servo_id}: "
+                f"{min_pos} -> {max_pos} -> {center}"
+            )
+            return True
+        except Exception as e:
+            self.get_logger().error(f"Boundary test failed for servo {servo_id}: {e}")
+            return False
+
+    def test_all_boundaries(self) -> None:
+        """Test boundaries for all configured servos sequentially."""
+        for config in self.servo_configs.values():
+            if config.limits.enabled:
+                self.test_boundaries(
+                    config.servo_id,
+                    config.limits.min_position,
+                    config.limits.max_position
+                )
+
+    def set_limits_on_servo(
+        self,
+        servo_id: int,
+        min_pos: int,
+        max_pos: int
+    ) -> bool:
+        """
+        Write min/max limits to servo EEPROM.
+
+        Args:
+            servo_id: Servo ID to configure
+            min_pos: Minimum position limit
+            max_pos: Maximum position limit
+
+        Returns:
+            True if limits were written successfully
+        """
+        try:
+            servo = self.servo_bus.wrap_servo(servo_id)
+            servo.eeprom.write_min_angle_limit(min_pos)
+            servo.eeprom.write_max_angle_limit(max_pos)
+            self.get_logger().info(
+                f"Wrote limits to servo {servo_id}: {min_pos} - {max_pos}"
+            )
+            return True
+        except Exception as e:
+            self.get_logger().error(f"Failed to write limits to servo {servo_id}: {e}")
+            return False
 
     def command_callback(self, msg: Float32MultiArray) -> None:
         """

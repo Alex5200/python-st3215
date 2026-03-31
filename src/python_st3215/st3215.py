@@ -218,6 +218,56 @@ class ST3215:
                 responses[servo_id] = None
         return responses
 
+    def MoveTo(
+        self,
+        servo_id: int,
+        position: int,
+        speed: int = 100,
+        acc: int = 50,
+        wait: bool = False,
+    ) -> None:
+        """
+        Move a servo to a target position.
+
+        Args:
+            servo_id: Servo ID (1-253)
+            position: Target position (0-4095)
+            speed: Movement speed (default: 100)
+            acc: Acceleration (default: 50)
+            wait: If True, wait for movement to complete
+        """
+        servo = self.wrap_servo(servo_id)
+        servo.sram.write_target_location(position)
+        servo.sram.write_running_speed(speed)
+        servo.sram.write_acceleration(acc)
+        if wait:
+            import time
+            while self.IsMoving(servo_id):
+                time.sleep(0.01)
+
+    def IsMoving(self, servo_id: int) -> bool:
+        """Check if servo is currently moving."""
+        servo = self.wrap_servo(servo_id)
+        return servo.sram.is_moving()
+
+    def ReadPosition(self, servo_id: int) -> int:
+        """Read current position from servo."""
+        servo = self.wrap_servo(servo_id)
+        pos = servo.sram.read_current_location()
+        return pos if pos is not None else 0
+
+    def ReadLoad(self, servo_id: int) -> float:
+        """Read current load (torque) from servo."""
+        servo = self.wrap_servo(servo_id)
+        load = servo.sram.read_current_load()
+        return float(load) if load is not None else 0.0
+
+    def ReadTemperature(self, servo_id: int) -> float:
+        """Read temperature from servo."""
+        servo = self.wrap_servo(servo_id)
+        temp = servo.sram.read_current_temperature()
+        return float(temp) if temp is not None else 0.0
+
     def __enter__(self) -> "ST3215":
         return self
 
